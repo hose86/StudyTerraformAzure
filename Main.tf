@@ -11,10 +11,11 @@ provider "azurerm" {
   features {}
 }
 
-output "public_ip" {
-  value		= azurerm_linux_virtual_machine.myterraformvm.public_ip_address
-  description	= "The public IP address of the web server"
+output "all_public_ips" {
+  value		= azurerm_linux_virtual_machine.myterraformvm[*].public_ip_address
+  description	= "The public IPs of all VMs"
 }
+
 
 # Create a resource group if it doesn't exist
 resource "azurerm_resource_group" "myterraformgroup" {
@@ -48,7 +49,8 @@ resource "azurerm_subnet" "myterraformsubnet" {
 
 # Create public IPs
 resource "azurerm_public_ip" "myterraformpublicip" {
-    name                         = "myPublicIP"
+    count			 = length(var.vm_names)
+    name                         = "myPublicIP_${var.vm_names[count.index]}"
     location                     = "eastus"
     resource_group_name          = azurerm_resource_group.myterraformgroup.name
     allocation_method            = "Dynamic"
@@ -95,7 +97,8 @@ resource "azurerm_network_security_group" "myterraformnsg" {
 
 # Create network interface
 resource "azurerm_network_interface" "myterraformnic" {
-    name                      = "myNIC"
+    count		      = length(var.vm_names)
+    name                      = "myNIC_${var.vm_names[count.index]}"
     location                  = "eastus"
     resource_group_name       = azurerm_resource_group.myterraformgroup.name
 
@@ -103,7 +106,7 @@ resource "azurerm_network_interface" "myterraformnic" {
         name                          = "myNicConfiguration"
         subnet_id                     = azurerm_subnet.myterraformsubnet.id
         private_ip_address_allocation = "Dynamic"
-        public_ip_address_id          = azurerm_public_ip.myterraformpublicip.id
+        public_ip_address_id          = azurerm_public_ip.myterraformpublicip[count.index].id
     }
 
     tags = {
@@ -113,7 +116,8 @@ resource "azurerm_network_interface" "myterraformnic" {
 
 # Connect the security group to the network interface
 resource "azurerm_network_interface_security_group_association" "example" {
-    network_interface_id      = azurerm_network_interface.myterraformnic.id
+    count		      = length(var.vm_names)
+    network_interface_id      = azurerm_network_interface.myterraformnic[count.index].id
     network_security_group_id = azurerm_network_security_group.myterraformnsg.id
 }
 
@@ -152,14 +156,15 @@ output "tls_private_key" {
 
 # Create virtual machine
 resource "azurerm_linux_virtual_machine" "myterraformvm" {
-    name                  = "myVM"
+    count		  = length(var.vm_names)
+    name                  = "${var.vm_names[count.index]}"
     location              = "eastus"
     resource_group_name   = azurerm_resource_group.myterraformgroup.name
-    network_interface_ids = [azurerm_network_interface.myterraformnic.id]
+    network_interface_ids = [azurerm_network_interface.myterraformnic[count.index].id]
     size                  = "Standard_B1s"
 
     os_disk {
-        name              = "myOsDisk"
+        name              = "myOsDisk_${var.vm_names[count.index]}"
         caching           = "ReadWrite"
         storage_account_type = "Premium_LRS"
     }
@@ -171,7 +176,7 @@ resource "azurerm_linux_virtual_machine" "myterraformvm" {
         version   = "latest"
     }
 
-    computer_name  = "myvm"
+    computer_name  = "${var.vm_names[count.index]}"
     admin_username = "azureuser"
     disable_password_authentication = true
 
@@ -190,15 +195,16 @@ resource "azurerm_linux_virtual_machine" "myterraformvm" {
 }
 
 resource "azurerm_virtual_machine_extension" "example" {
-  name                 = "myVM"
-  virtual_machine_id   = azurerm_linux_virtual_machine.myterraformvm.id
+  count		       = length(var.vm_names)
+  name                 = "${var.vm_names[count.index]}"
+  virtual_machine_id   = azurerm_linux_virtual_machine.myterraformvm[count.index].id
   publisher            = "Microsoft.Azure.Extensions"
   type                 = "CustomScript"
   type_handler_version = "2.0"
 
   settings = <<SETTINGS
     {
-        "commandToExecute": "echo 'Hello, World' > index.html && nohup busybox httpd -f -p 80 &"
+        "commandToExecute": "echo 'Hello, Alexander!' > index.html && nohup busybox httpd -f -p 80 &"
     }
 SETTINGS
 
